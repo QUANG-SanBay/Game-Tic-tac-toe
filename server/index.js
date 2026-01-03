@@ -1,7 +1,7 @@
 import http from "http";
 import 'dotenv/config';
 import app from './src/app.js';
-import setupSocket from "./src/socket.js";
+import setupSocket from "./src/config/socket.js";
 
 console.log("APP =", app);
 //const PORT = process.env.PORT || 3000;

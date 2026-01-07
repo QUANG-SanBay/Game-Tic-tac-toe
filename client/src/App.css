@@ -185,3 +185,59 @@
 .spacer {
   height: 8px;
 }
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 20;
+  padding: 16px;
+}
+
+.modal {
+  background: rgba(15, 22, 41, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 18px;
+  padding: 24px;
+  width: min(420px, 90vw);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.4);
+  color: #e2e8f0;
+}
+
+.modal h3 {
+  margin: 0 0 12px;
+  font-size: 22px;
+}
+
+.modal p {
+  margin: 0 0 18px;
+  color: #cbd5e1;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+}
+
+.result-modal.win {
+  border-color: rgba(0, 200, 120, 0.6);
+  box-shadow: 0 24px 80px rgba(0, 200, 120, 0.25);
+  background: linear-gradient(135deg, rgba(0, 200, 120, 0.16), rgba(15, 22, 41, 0.9));
+}
+
+.result-modal.lose {
+  border-color: rgba(255, 75, 43, 0.6);
+  box-shadow: 0 24px 80px rgba(255, 75, 43, 0.25);
+  background: linear-gradient(135deg, rgba(255, 75, 43, 0.16), rgba(15, 22, 41, 0.9));
+}
+
+.result-modal.draw {
+  border-color: rgba(255, 214, 10, 0.6);
+  box-shadow: 0 24px 80px rgba(255, 214, 10, 0.25);
+  background: linear-gradient(135deg, rgba(255, 214, 10, 0.16), rgba(15, 22, 41, 0.9));
+}

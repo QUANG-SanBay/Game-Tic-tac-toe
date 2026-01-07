@@ -4,10 +4,17 @@ import crypto from "crypto";
 const rooms = {};
 const playerRoom = {};
 
+const hasTwoPlayers = (room) => room.players.X && room.players.O;
+const getOpponentId = (room, socketId) => {
+  if (!room) return null;
+  return room.players.X === socketId ? room.players.O : room.players.X;
+};
+
 export const gameService = {
   joinGame: (socketId) => {
-    // tìm phòng còn trống, nếu không có thì tạo mới
-    const waitingRoomId = Object.keys(rooms).find((id) => !rooms[id].players.O);
+    const waitingRoomId = Object.keys(rooms).find(
+      (id) => !rooms[id].players.O || !rooms[id].players.X
+    );
 
     if (!waitingRoomId) {
       const roomId = crypto.randomUUID().slice(0, 6);
@@ -17,6 +24,7 @@ export const gameService = {
         players: { X: socketId, O: null },
         turn: "X",
         isGameOver: false,
+        waiting: true,
       };
       playerRoom[socketId] = roomId;
       return {
@@ -29,15 +37,21 @@ export const gameService = {
     }
 
     const room = rooms[waitingRoomId];
-    room.players.O = socketId;
+    if (!room.players.X) {
+      room.players.X = socketId;
+      room.turn = "X";
+    } else {
+      room.players.O = socketId;
+    }
+    room.waiting = !hasTwoPlayers(room);
     playerRoom[socketId] = waitingRoomId;
 
     return {
       roomId: waitingRoomId,
       board: room.board,
       turn: room.turn,
-      symbol: "O",
-      waiting: false,
+      symbol: room.players.X === socketId ? "X" : "O",
+      waiting: room.waiting,
     };
   },
 
@@ -47,6 +61,10 @@ export const gameService = {
 
     if (!room) {
       return { ok: false, error: "Bạn chưa tham gia phòng nào" };
+    }
+
+    if (!hasTwoPlayers(room)) {
+      return { ok: false, error: "Đang chờ đối thủ" };
     }
 
     if (room.isGameOver) {
@@ -75,12 +93,14 @@ export const gameService = {
 
     if (result) {
       room.isGameOver = true;
+      room.waiting = false;
       return {
         ok: true,
         state: "gameover",
         roomId,
         board: room.board,
         result,
+        players: { ...room.players },
       };
     }
 
@@ -94,26 +114,86 @@ export const gameService = {
     };
   },
 
-  removePlayer: (socketId) => {
+  forfeit: (socketId) => {
+    const roomId = playerRoom[socketId];
+    const room = rooms[roomId];
+    if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+    const opponentId = getOpponentId(room, socketId);
+    if (!opponentId) return { ok: false, error: "Không có đối thủ" };
+
+    const loserSymbol = room.players.X === socketId ? "X" : "O";
+    const winnerSymbol = loserSymbol === "X" ? "O" : "X";
+    room.isGameOver = true;
+    room.waiting = false;
+
+    return {
+      ok: true,
+      roomId,
+      board: room.board,
+      result: { status: "win", winner: winnerSymbol, loser: loserSymbol },
+      players: { ...room.players },
+    };
+  },
+
+  requestRematch: (socketId) => {
+    const roomId = playerRoom[socketId];
+    const room = rooms[roomId];
+    if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+    const opponentId = getOpponentId(room, socketId);
+    if (!opponentId) return { ok: false, error: "Không có đối thủ" };
+    return { ok: true, opponentId, roomId };
+  },
+
+  respondRematch: (socketId, accepted) => {
+    const roomId = playerRoom[socketId];
+    const room = rooms[roomId];
+    if (!room) return { ok: false, error: "Không tìm thấy phòng" };
+    const opponentId = getOpponentId(room, socketId);
+    if (!opponentId) return { ok: false, error: "Không có đối thủ" };
+
+    if (!accepted) {
+      return { ok: true, declined: true, opponentId };
+    }
+
+    room.board = Array(9).fill(null);
+    room.turn = "X";
+    room.isGameOver = false;
+    room.waiting = false;
+
+    return {
+      ok: true,
+      declined: false,
+      roomId,
+      opponentId,
+      board: room.board,
+      turn: room.turn,
+    };
+  },
+
+  leaveRoom: (socketId) => {
     const roomId = playerRoom[socketId];
     if (!roomId) return null;
 
     const room = rooms[roomId];
     delete playerRoom[socketId];
-
     if (!room) return null;
 
     if (room.players.X === socketId) room.players.X = null;
     if (room.players.O === socketId) room.players.O = null;
 
-    // phòng trống thì xóa
+    const opponentId = getOpponentId(room, socketId);
+
     if (!room.players.X && !room.players.O) {
       delete rooms[roomId];
       return { roomId, deleted: true };
     }
 
-    room.isGameOver = true;
-    return { roomId, deleted: false };
+    room.board = Array(9).fill(null);
+    room.turn = "X";
+    room.isGameOver = false;
+    room.waiting = true;
+
+    return { roomId, deleted: false, opponentId };
   },
 };
 

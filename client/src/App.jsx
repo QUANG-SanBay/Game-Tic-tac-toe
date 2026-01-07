@@ -11,6 +11,21 @@ export default function App() {
   const [turn, setTurn] = useState("X");
   const [status, setStatus] = useState("");
   const [symbol, setSymbol] = useState(null);
+  const [roomId, setRoomId] = useState(null);
+  const [waiting, setWaiting] = useState(false);
+  const [showRematchModal, setShowRematchModal] = useState(false);
+  const [showResultModal, setShowResultModal] = useState(false);
+  const [resultType, setResultType] = useState(null); // win | lose | draw
+  const [resultMessage, setResultMessage] = useState("");
+  const [gameEnded, setGameEnded] = useState(false);
+
+  const setResultState = (type, message) => {
+    setResultType(type);
+    setResultMessage(message);
+    setStatus(message);
+    setGameEnded(true);
+    setShowResultModal(true);
+  };
 
   useEffect(() => {
     if (mode !== "online") return;
@@ -23,20 +38,38 @@ export default function App() {
       setBoard(data.board);
       setTurn(data.turn);
       setSymbol(data.symbol);
+      setRoomId(data.roomId);
+      setWaiting(data.waiting);
       setStatus(data.waiting ? "Đang chờ đối thủ..." : "");
     };
 
     const handleUpdate = (data) => {
       setBoard(data.board);
       setTurn(data.turn);
+      setWaiting(false);
       setStatus("");
     };
 
     const handleGameOver = (data) => {
       setBoard(data.board);
-      const { status: resultStatus, winner } = data.result;
-      const message = resultStatus === "draw" ? "Hòa!" : `${winner} thắng!`;
-      setStatus(message);
+      const { status: resultStatus } = data.result;
+
+      if (resultStatus === "draw") {
+        setResultState("draw", "Ván đấu kết thúc: Hòa");
+        return;
+      }
+
+      if (resultStatus === "win") {
+        setResultState("win", "Bạn đã thắng!");
+        return;
+      }
+
+      if (resultStatus === "lose") {
+        setResultState("lose", "Bạn đã thua!");
+        return;
+      }
+
+      setResultState("draw", "Ván đấu kết thúc");
     };
 
     const handleError = (msg) => {
@@ -47,6 +80,29 @@ export default function App() {
     socket.on("update", handleUpdate);
     socket.on("gameOver", handleGameOver);
     socket.on("errorMessage", handleError);
+    socket.on("opponentLeft", () => {
+      setWaiting(true);
+      setStatus("Đối thủ đã rời phòng, đang chờ người mới...");
+      setBoard(Array(9).fill(null));
+      setTurn("X");
+    });
+    socket.on("roomClosed", () => {
+      resetToMenu();
+    });
+    socket.on("rematchOffer", () => {
+      setShowRematchModal(true);
+    });
+    socket.on("rematchDeclined", () => {
+      setStatus("Đối thủ từ chối chơi lại");
+    });
+    socket.on("rematchStart", (data) => {
+      setBoard(data.board);
+      setTurn(data.turn);
+      setStatus("");
+      setWaiting(false);
+      setShowRematchModal(false);
+      setGameEnded(false);
+    });
 
     socket.emit("joinGame");
 
@@ -55,6 +111,11 @@ export default function App() {
       socket.off("update", handleUpdate);
       socket.off("gameOver", handleGameOver);
       socket.off("errorMessage", handleError);
+      socket.off("opponentLeft");
+      socket.off("roomClosed");
+      socket.off("rematchOffer");
+      socket.off("rematchDeclined");
+      socket.off("rematchStart");
     };
   }, [mode]);
 
@@ -79,7 +140,11 @@ export default function App() {
     let result = checkWinner(newBoard);
     if (result) {
       setBoard(newBoard);
-      setStatus(result === "draw" ? "Hòa!" : "Bạn thắng!");
+      if (result === "draw") {
+        setResultState("draw", "Ván đấu kết thúc: Hòa");
+      } else {
+        setResultState("win", "Bạn đã thắng!");
+      }
       return;
     }
 
@@ -87,7 +152,11 @@ export default function App() {
     result = checkWinner(newBoard);
 
     if (result) {
-      setStatus(result === "draw" ? "Hòa!" : "Máy thắng!");
+      if (result === "draw") {
+        setResultState("draw", "Ván đấu kết thúc: Hòa");
+      } else {
+        setResultState("lose", "Bạn đã thua!");
+      }
     }
 
     setBoard(newBoard);
@@ -103,9 +172,45 @@ export default function App() {
     setTurn("X");
     setStatus("");
     setSymbol(null);
+    setRoomId(null);
+    setWaiting(false);
+    setShowRematchModal(false);
+    setShowResultModal(false);
+    setResultType(null);
+    setResultMessage("");
+    setGameEnded(false);
   };
 
-  const isGameOver = status.toLowerCase().includes("thắng") || status.toLowerCase().includes("hòa") || status.toLowerCase().includes("draw");
+  const resetToMenu = () => {
+    resetGame();
+    setMode(null);
+  };
+
+  const isGameOver = gameEnded;
+
+  const handleLeaveRoom = () => {
+    if (mode === "online" && roomId) {
+      socket.emit("leaveRoom");
+    }
+    resetToMenu();
+  };
+
+  const handleForfeit = () => {
+    socket.emit("forfeit");
+  };
+
+  const requestRematch = () => {
+    socket.emit("requestRematch");
+  };
+
+  const respondRematch = (accept) => {
+    socket.emit("respondRematch", accept);
+    setShowRematchModal(false);
+  };
+
+  const closeResultModal = () => {
+    setShowResultModal(false);
+  };
 
   if (!mode) {
     return (
@@ -133,15 +238,16 @@ export default function App() {
         <div className="game-header">
           <div>
             <p className="eyebrow">trận đấu</p>
-            <h2 className="game-title">Tic Toe</h2>
+            <h2 className="game-title">Tic Tac Toe</h2>
           </div>
-          {status && <div className="pill">{status}</div>}
+          <div className="pill">Phòng: <strong>{roomId || "..."}</strong></div>
         </div>
 
         <div className="status-bar">
           <div className="pill">
             Bạn là: <strong>{symbol || (mode === "single" ? "X" : "...")}</strong>
           </div>
+          {status && <div className="pill">{status}</div>}
           <div className="pill turn">
             Lượt chơi: <strong>{turn}</strong>
           </div>
@@ -162,16 +268,55 @@ export default function App() {
         </div>
 
         <div className="footer-actions">
-          {isGameOver && (
-            <button className="btn btn-primary" onClick={resetGame}>
+          {waiting && (
+            <button className="btn btn-ghost" onClick={handleLeaveRoom}>
+              Quay về menu
+            </button>
+          )}
+          {!waiting && !isGameOver && (
+            <button className="btn btn-secondary" onClick={handleForfeit}>
+              Đầu hàng
+            </button>
+          )}
+          {isGameOver && !waiting && (
+            <button className="btn btn-primary" onClick={requestRematch}>
               Chơi lại
             </button>
           )}
-          <button className="btn btn-ghost" onClick={() => setMode(null)}>
-            Quay về menu
+          <button className="btn btn-ghost" onClick={handleLeaveRoom}>
+            Thoát menu
           </button>
         </div>
       </div>
+
+      {showResultModal && (
+        <div className="modal-backdrop">
+          <div className={`modal result-modal ${resultType}`}>
+            <h3>{resultType === "win" ? "Bạn đã thắng" : resultType === "lose" ? "Bạn đã thua" : "Hòa"}</h3>
+            <p>{resultMessage || "Ván đấu kết thúc"}</p>
+            <div className="modal-actions">
+              <button className="btn btn-primary" onClick={closeResultModal}>OK</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showRematchModal && (
+        <div className="modal-backdrop">
+          <div className="modal">
+            <h3>Đối thủ mời chơi lại</h3>
+            <p>Bạn có muốn tiếp tục ván mới trong phòng hiện tại?</p>
+            <div className="modal-actions">
+              <button className="btn btn-secondary" onClick={() => respondRematch(false)}>
+                Từ chối
+              </button>
+              <button className="btn btn-primary" onClick={() => respondRematch(true)}>
+                Chấp nhận
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

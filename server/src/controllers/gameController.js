@@ -1,33 +1,52 @@
 import { gameService } from "../services/gameService.js";
 
 export const gameController = (io, socket) => {
-  // Xử lý tạo phòng
-  socket.on("createRoom", (roomId) => {
-    const room = gameService.createRoom(roomId, socket.id);
-    socket.join(roomId);
-    socket.emit("roomCreated", roomId);
-  });
+  socket.on("joinGame", () => {
+    const joined = gameService.joinGame(socket.id);
 
-  // Xử lý tham gia phòng
-  socket.on("joinRoom", (roomId) => {
-    try {
-      const room = gameService.joinRoom(roomId, socket.id);
-      socket.join(roomId);
-      io.to(roomId).emit("startGame", room);
-    } catch (error) {
-      socket.emit("error", error.message);
+    socket.join(joined.roomId);
+    socket.emit("init", {
+      roomId: joined.roomId,
+      board: joined.board,
+      turn: joined.turn,
+      symbol: joined.symbol,
+      waiting: joined.waiting,
+    });
+
+    if (!joined.waiting) {
+      io.to(joined.roomId).emit("update", {
+        board: joined.board,
+        turn: joined.turn,
+      });
     }
   });
 
-  // Xử lý đánh cờ
-  socket.on("makeMove", ({ roomId, index }) => {
-    const moveResult = gameService.makeMove(roomId, index, socket.id);
-    if (!moveResult) return;
+  socket.on("makeMove", (index) => {
+    const move = gameService.makeMove(socket.id, index);
 
-    if (moveResult.type === "GAME_OVER") {
-      io.to(roomId).emit("gameOver", { result: moveResult.result, board: moveResult.board });
-    } else {
-      io.to(roomId).emit("updateGame", moveResult.room);
+    if (!move.ok) {
+      socket.emit("errorMessage", move.error);
+      return;
+    }
+
+    if (move.state === "gameover") {
+      io.to(move.roomId).emit("gameOver", {
+        board: move.board,
+        result: move.result,
+      });
+      return;
+    }
+
+    io.to(move.roomId).emit("update", {
+      board: move.board,
+      turn: move.turn,
+    });
+  });
+
+  socket.on("disconnect", () => {
+    const left = gameService.removePlayer(socket.id);
+    if (left) {
+      io.to(left.roomId).emit("errorMessage", "Đối thủ đã rời phòng");
     }
   });
 };

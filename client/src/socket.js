@@ -1,4 +1,4 @@
 import { io } from "socket.io-client";
 
-const socket = io("http://localhost:3001"); // đổi port nếu backend khác
-export default socket;
+const url = import.meta.env.VITE_SOCKET_URL || "http://localhost:5000";
+export default io(url, { autoConnect: true });

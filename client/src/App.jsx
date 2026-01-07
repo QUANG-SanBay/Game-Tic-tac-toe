@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import socket from "./socket";
 import { checkWinner } from "./utils/checkWinner";
+import "./App.css";
 
 const emptyBoard = Array(9).fill(null);
 
@@ -22,13 +23,13 @@ export default function App() {
       setBoard(data.board);
       setTurn(data.turn);
       setSymbol(data.symbol);
-      setStatus(data.waiting ? "Đang chờ đối thủ..." : `Bạn là ${data.symbol}`);
+      setStatus(data.waiting ? "Đang chờ đối thủ..." : "");
     };
 
     const handleUpdate = (data) => {
       setBoard(data.board);
       setTurn(data.turn);
-      setStatus(`Lượt chơi: ${data.turn}`);
+      setStatus("");
     };
 
     const handleGameOver = (data) => {
@@ -104,42 +105,73 @@ export default function App() {
     setSymbol(null);
   };
 
+  const isGameOver = status.toLowerCase().includes("thắng") || status.toLowerCase().includes("hòa") || status.toLowerCase().includes("draw");
+
   if (!mode) {
     return (
-      <div style={{ padding: 30 }}>
-        <h2>🎮 Tic Tac Toe</h2>
-        <button onClick={() => setMode("single")}>Chơi 1 người</button>
-        <br />
-        <br />
-        <button onClick={() => setMode("online")}>Chơi Online</button>
+      <div className="page">
+        <div className="glass-card menu-card">
+          <p className="eyebrow">multiplayer / offline</p>
+          <h1 className="title">Tic <span>Tac</span> Toe</h1>
+          <p className="subtitle">Chọn chế độ chơi và bắt đầu ván mới</p>
+          <div className="menu-actions">
+            <button className="btn btn-primary" onClick={() => setMode("online")}>
+              Chơi Online
+            </button>
+            <button className="btn btn-secondary" onClick={() => setMode("single")}>
+              Chơi 1 người
+            </button>
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
-    <div style={{ padding: 30 }}>
-      <h2>🎮 Tic Tac Toe</h2>
-      {symbol && <p>Bạn là: {symbol}</p>}
-      <p>{status || `Lượt chơi: ${turn}`}</p>
+    <div className="page">
+      <div className="glass-card game-shell">
+        <div className="game-header">
+          <div>
+            <p className="eyebrow">trận đấu</p>
+            <h2 className="game-title">Tic Toe</h2>
+          </div>
+          {status && <div className="pill">{status}</div>}
+        </div>
 
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 80px)" }}>
-        {board.map((cell, i) => (
-          <button
-            key={i}
-            onClick={() => (mode === "single" ? handleSingleClick(i) : handleOnlineClick(i))}
-            style={{ width: 80, height: 80, fontSize: 32 }}
-          >
-            {cell}
+        <div className="status-bar">
+          <div className="pill">
+            Bạn là: <strong>{symbol || (mode === "single" ? "X" : "...")}</strong>
+          </div>
+          <div className="pill turn">
+            Lượt chơi: <strong>{turn}</strong>
+          </div>
+        </div>
+
+        <div className="board-shell">
+          <div className="board">
+            {board.map((cell, i) => (
+              <button
+                key={i}
+                className={`cell ${cell === "X" ? "x" : cell === "O" ? "o" : ""}`}
+                onClick={() => (mode === "single" ? handleSingleClick(i) : handleOnlineClick(i))}
+              >
+                {cell}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="footer-actions">
+          {isGameOver && (
+            <button className="btn btn-primary" onClick={resetGame}>
+              Chơi lại
+            </button>
+          )}
+          <button className="btn btn-ghost" onClick={() => setMode(null)}>
+            Quay về menu
           </button>
-        ))}
+        </div>
       </div>
-
-      <br />
-      <button onClick={resetGame}>Chơi lại</button>
-
-      <br />
-      <br />
-      <button onClick={() => setMode(null)}>Quay lại menu</button>
     </div>
   );
 }
